@@ -1,91 +1,98 @@
 import { Client, GatewayIntentBits } from "discord.js";
 import axios from "axios";
-import * as cheerio from "cheerio";
+import cheerio from "cheerio";
 import cron from "node-cron";
 import fs from "fs";
-import express from "express";
 
-const TARGET_BLOG_URL = "https://lala.fanpla.jp/blog/listall/";
-const FILE = "./last.txt";
+const BLOG_URL = "https://lala.fanpla.jp/blog/listall/";
+const DATA_FILE = "./last_blogs.json"; // 前回取得データを保存
 
-// ===== Discord Client =====
-const client = new Client({
-  intents: [GatewayIntentBits.Guilds]
-});
+const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
-// 起動ログ
 client.once("clientReady", () => {
-  console.log("✅ Bot起動完了");
+  console.log("Bot起動完了");
 });
 
-// エラー監視（必須）
-client.on("error", console.error);
+// 前回データ読み込み
+function loadOldData() {
+  if (fs.existsSync(DATA_FILE)) {
+    return JSON.parse(fs.readFileSync(DATA_FILE, "utf-8"));
+  }
+  return {};
+}
 
-process.on("unhandledRejection", error => {
-  console.error("未処理エラー:", error);
-});
+// データ保存
+function saveData(data) {
+  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+}
 
-process.on("uncaughtException", error => {
-  console.error("致命的エラー:", error);
-});
+// 差分チェック
+function getDiff(oldData, newData) {
+  const diff = [];
+  for (const cat in newData) {
+    newData[cat].forEach(item => {
+      const exists = oldData[cat]?.some(o => o.link === item.link);
+      if (!exists) diff.push(item);
+    });
+  }
+  return diff;
+}
 
-// ===== ブログ更新チェック =====
-async function checkWebsite() {
+// ブログ取得
+async function fetchBlogs() {
   try {
-    console.log("🔍 ブログ更新チェック");
-
-    const res = await axios.get(TARGET_BLOG_URL);
+    const res = await axios.get(BLOG_URL);
     const $ = cheerio.load(res.data);
 
-    const firstArticle = $(".blogList li").first();
+    const data = {};
 
-    const title = firstArticle.find(".blogList_ttl").text().trim();
-    const link = firstArticle.find("a").attr("href");
-    const date = firstArticle.find(".blogList_date").text().trim();
+    $(".block--bloglist").each((i, block) => {
+      const category = $(block).find(".block--title .tit").text().trim();
+      data[category] = [];
 
-    if (!title) {
-      console.log("ブログ取得失敗");
-      return;
-    }
+      $(block).find(".list__item").each((j, item) => {
+        const title = $(item).find(".block--txt .tit").text().trim();
+        const date = $(item).find(".wrap--data .date").text().trim();
+        const link = $(item).find("a").attr("href");
+        if (title && link) {
+          data[category].push({
+            date,
+            title,
+            link: `https://lala.fanpla.jp${link}`
+          });
+        }
+      });
+    });
 
-    let oldTitle = "";
-    if (fs.existsSync(FILE)) {
-      oldTitle = fs.readFileSync(FILE, "utf-8");
-    }
-
-    if (oldTitle && oldTitle !== title) {
-      const channel = await client.channels.fetch(process.env.CHANNEL_ID);
-
-      await channel.send(
-        `📝 **ブログ更新！**\n\n📅 ${date}\n📌 ${title}\n\n🔗 https://lala.fanpla.jp${link}`
-      );
-
-      console.log("📨 ブログ通知送信");
-    }
-
-    fs.writeFileSync(FILE, title);
-
-    console.log("✅ チェック完了");
-
+    return data;
   } catch (err) {
-    console.error("❌ ブログチェックエラー:", err.message);
+    console.error("ブログ取得失敗:", err.message);
+    return null;
   }
 }
 
-// 5分ごとに実行
-cron.schedule("*/5 * * * *", checkWebsite);
+// 更新チェック＆通知
+async function checkUpdate() {
+  const oldData = loadOldData();
+  const newData = await fetchBlogs();
+  if (!newData) return;
 
-// ===== Discordログイン =====
+  const diff = getDiff(oldData, newData);
+  if (diff.length > 0) {
+    const channel = await client.channels.fetch(process.env.CHANNEL_ID);
+    for (const item of diff) {
+      await channel.send(
+        `📢 **ブログ更新**\n[${item.title}](${item.link})\n📅 ${item.date}`
+      );
+    }
+    saveData(newData);
+    console.log(diff.length, "件の新規ブログを通知しました");
+  } else {
+    console.log("新規ブログなし");
+  }
+}
+
+// 5分ごとにチェック
+cron.schedule("*/5 * * * *", checkUpdate);
+
 client.login(process.env.DISCORD_TOKEN);
-
-// ===== Render用ダミーWebサーバー =====
-const app = express();
-const PORT = process.env.PORT || 3000;
-
-app.get("/", (req, res) => {
-  res.send("Bot is running");
-});
-
-app.listen(PORT, () => {
-  console.log(`🌐 Server running on port ${PORT}`);
-});
