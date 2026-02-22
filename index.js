@@ -46,38 +46,45 @@ function getDiff(oldText, newText) {
 // ===== サイトチェック =====
 async function checkWebsite() {
   try {
-    console.log("🔍 更新チェック開始");
+    console.log("🔍 ブログ更新チェック");
 
-    const res = await axios.get(TARGET_URL, {
-      timeout: 15000
-    });
-
+    const res = await axios.get("https://lala.fanpla.jp/blog/listall/");
     const $ = cheerio.load(res.data);
 
-    const text = $("body")
-      .text()
-      .replace(/\s+/g, "\n")
-      .trim();
+    // 一番上の記事を取得
+    const firstArticle = $(".blogList li").first();
 
-    let oldText = "";
-    if (fs.existsSync(FILE)) {
-      oldText = fs.readFileSync(FILE, "utf-8");
+    const title = firstArticle.find(".blogList_ttl").text().trim();
+    const link = firstArticle.find("a").attr("href");
+    const date = firstArticle.find(".blogList_date").text().trim();
+
+    if (!title) {
+      console.log("ブログ取得失敗");
+      return;
     }
 
-    const diff = getDiff(oldText, text);
+    let oldTitle = "";
+    if (fs.existsSync(FILE)) {
+      oldTitle = fs.readFileSync(FILE, "utf-8");
+    }
 
-    if (diff && diff.length > 0 && oldText) {
+    if (oldTitle && oldTitle !== title) {
       const channel = await client.channels.fetch(process.env.CHANNEL_ID);
 
-      if (channel) {
-        await channel.send(
-          "📢 **Lalaサイト更新！**\n\n" +
-          diff.join("\n") +
-          "\n\n🔗 https://lala.fanpla.jp"
-        );
-        console.log("📨 更新通知送信完了");
-      }
+      await channel.send(
+        📝 **ブログ更新！**\n\n📅 ${date}\n📌 ${title}\n\n🔗 https://lala.fanpla.jp${link}
+      );
+
+      console.log("📨 ブログ通知送信");
     }
+
+    fs.writeFileSync(FILE, title);
+
+  } catch (err) {
+    console.error("❌ ブログチェックエラー:", err.message);
+  }
+}
+
 
     fs.writeFileSync(FILE, text);
 
