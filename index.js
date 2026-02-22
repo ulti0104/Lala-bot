@@ -1,6 +1,6 @@
 import { Client, GatewayIntentBits } from "discord.js";
 import axios from "axios";
-import cheerio from "cheerio";
+import * as cheerio from "cheerio";
 import cron from "node-cron";
 import fs from "fs";
 
