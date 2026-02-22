@@ -5,7 +5,7 @@ import cron from "node-cron";
 import fs from "fs";
 import express from "express";
 
-const TARGET_URL = "https://lala.fanpla.jp";
+const TARGET_BLOG_URL = "https://lala.fanpla.jp/blog/listall/";
 const FILE = "./last.txt";
 
 // ===== Discord Client =====
@@ -18,7 +18,7 @@ client.once("clientReady", () => {
   console.log("✅ Bot起動完了");
 });
 
-// エラー監視（超重要）
+// エラー監視（必須）
 client.on("error", console.error);
 
 process.on("unhandledRejection", error => {
@@ -29,29 +29,14 @@ process.on("uncaughtException", error => {
   console.error("致命的エラー:", error);
 });
 
-// ===== 差分抽出 =====
-function getDiff(oldText, newText) {
-  if (!oldText) return null;
-
-  const oldLines = oldText.split("\n");
-  const newLines = newText.split("\n");
-
-  const added = newLines.filter(line =>
-    !oldLines.includes(line) && line.trim() !== ""
-  );
-
-  return added.slice(0, 10);
-}
-
-// ===== サイトチェック =====
+// ===== ブログ更新チェック =====
 async function checkWebsite() {
   try {
     console.log("🔍 ブログ更新チェック");
 
-    const res = await axios.get("https://lala.fanpla.jp/blog/listall/");
+    const res = await axios.get(TARGET_BLOG_URL);
     const $ = cheerio.load(res.data);
 
-    // 一番上の記事を取得
     const firstArticle = $(".blogList li").first();
 
     const title = firstArticle.find(".blogList_ttl").text().trim();
@@ -72,7 +57,7 @@ async function checkWebsite() {
       const channel = await client.channels.fetch(process.env.CHANNEL_ID);
 
       await channel.send(
-        📝 **ブログ更新！**\n\n📅 ${date}\n📌 ${title}\n\n🔗 https://lala.fanpla.jp${link}
+        `📝 **ブログ更新！**\n\n📅 ${date}\n📌 ${title}\n\n🔗 https://lala.fanpla.jp${link}`
       );
 
       console.log("📨 ブログ通知送信");
@@ -80,18 +65,10 @@ async function checkWebsite() {
 
     fs.writeFileSync(FILE, title);
 
-  } catch (err) {
-    console.error("❌ ブログチェックエラー:", err.message);
-  }
-}
-
-
-    fs.writeFileSync(FILE, text);
-
     console.log("✅ チェック完了");
 
   } catch (err) {
-    console.error("❌ チェックエラー:", err.message);
+    console.error("❌ ブログチェックエラー:", err.message);
   }
 }
 
