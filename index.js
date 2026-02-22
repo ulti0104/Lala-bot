@@ -69,3 +69,16 @@ async function checkWebsite() {
 cron.schedule("*/5 * * * *", checkWebsite);
 
 client.login(process.env.DISCORD_TOKEN);
+
+import express from "express";
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.get("/", (req, res) => {
+  res.send("Bot is running");
+});
+
+app.listen(PORT, () => {
+  console.log(Server running on port ${PORT});
+});
