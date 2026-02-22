@@ -1,11 +1,11 @@
 import { Client, GatewayIntentBits } from "discord.js";
 import axios from "axios";
-import cheerio from "cheerio";
+import * as cheerio from "cheerio"; // ←ここ修正
 import cron from "node-cron";
 import fs from "fs";
 
 const BLOG_URL = "https://lala.fanpla.jp/blog/listall/";
-const DATA_FILE = "./last_blogs.json"; // 前回取得データを保存
+const DATA_FILE = "./last_blogs.json";
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
@@ -13,7 +13,6 @@ client.once("clientReady", () => {
   console.log("Bot起動完了");
 });
 
-// 前回データ読み込み
 function loadOldData() {
   if (fs.existsSync(DATA_FILE)) {
     return JSON.parse(fs.readFileSync(DATA_FILE, "utf-8"));
@@ -21,12 +20,10 @@ function loadOldData() {
   return {};
 }
 
-// データ保存
 function saveData(data) {
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
 }
 
-// 差分チェック
 function getDiff(oldData, newData) {
   const diff = [];
   for (const cat in newData) {
@@ -38,7 +35,6 @@ function getDiff(oldData, newData) {
   return diff;
 }
 
-// ブログ取得
 async function fetchBlogs() {
   try {
     const res = await axios.get(BLOG_URL);
@@ -71,7 +67,6 @@ async function fetchBlogs() {
   }
 }
 
-// 更新チェック＆通知
 async function checkUpdate() {
   const oldData = loadOldData();
   const newData = await fetchBlogs();
@@ -82,7 +77,7 @@ async function checkUpdate() {
     const channel = await client.channels.fetch(process.env.CHANNEL_ID);
     for (const item of diff) {
       await channel.send(
-        `📢 **ブログ更新**\n[${item.title}](${item.link})\n📅 ${item.date}`
+        `📢 **新しいブログ更新**\n[${item.title}](${item.link})\n📅 ${item.date}`
       );
     }
     saveData(newData);
@@ -92,7 +87,6 @@ async function checkUpdate() {
   }
 }
 
-// 5分ごとにチェック
 cron.schedule("*/5 * * * *", checkUpdate);
 
 client.login(process.env.DISCORD_TOKEN);
