@@ -166,4 +166,8 @@ cron.schedule("*/5 * * * *", async () => {
   }
 });
 
-client.login(process.env.DISCORD_TOKEN);
+console.log("TOKEN確認:", process.env.DISCORD_TOKEN ? "OK" : "未設定");
+
+client.login(process.env.DISCORD_TOKEN)
+  .then(() => console.log("ログイン成功"))
+  .catch(err => console.error("ログイン失敗:", err.message));
