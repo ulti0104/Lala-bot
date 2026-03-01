@@ -42,17 +42,26 @@ client.once("clientReady", () => {
 // ---------- 最新1件取得 ----------
 function getLatestBlog(html) {
   const $ = cheerio.load(html);
-  const first = $(".block--bloglist .list__item").first();
 
-  const title = first.find(".block--txt .tit").text().trim();
-  const link =
-    "https://lala.fanpla.jp" + first.find("a").attr("href");
+  const first = $("li.list__item").first();
 
-  if (!title || !link) return null;
+  if (!first.length) {
+    console.log("list__item が見つかりません");
+    return null;
+  }
+
+  const title = first.find(".tit").text().trim();
+  const linkPath = first.find("a").attr("href");
+
+  if (!title || !linkPath) {
+    console.log("title または link が取得できません");
+    return null;
+  }
+
+  const link = "https://lala.fanpla.jp" + linkPath;
 
   return `${title}\n${link}`;
 }
-
 // ---------- 通知 ----------
 async function sendDiscord(title, content) {
   try {
