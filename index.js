@@ -1,5 +1,11 @@
 import express from "express";
-import { Client, GatewayIntentBits } from "discord.js";
+import {
+  Client,
+  GatewayIntentBits,
+  REST,
+  Routes,
+  SlashCommandBuilder
+} from "discord.js";
 import axios from "axios";
 import * as cheerio from "cheerio";
 import cron from "node-cron";
@@ -27,73 +33,81 @@ const BLOGS = [
 const FILE = "./last.json";
 const PORT = process.env.PORT || 10000;
 
-// ---------- Express ----------
+// Express
 const app = express();
 app.get("/", (_, res) => res.send("Bot稼働中"));
 app.listen(PORT, () => console.log(`🌐 Server running on port ${PORT}`));
 
-// ---------- Discord ----------
-const client = new Client({ intents: [GatewayIntentBits.Guilds] });
-
-client.once("clientReady", () => {
-  console.log("✅ Bot起動完了");
+// Discord
+const client = new Client({
+  intents: [GatewayIntentBits.Guilds]
 });
 
-// ---------- 最新1件取得 ----------
-function getLatestBlog(html) {
-  const $ = cheerio.load(html);
+client.once("clientReady", async () => {
+  console.log("✅ Bot起動完了");
 
-  const first = $("li.list__item").first();
+  // ----- スラッシュコマンド登録 -----
+  const commands = [
+    new SlashCommandBuilder()
+      .setName("test")
+      .setDescription("通知テストを送信します")
+  ].map(cmd => cmd.toJSON());
 
-  if (!first.length) {
-    console.log("list__item が見つかりません");
-    return null;
-  }
+  const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
 
-  const title = first.find(".tit").text().trim();
-  const linkPath = first.find("a").attr("href");
+  await rest.put(
+    Routes.applicationCommands(process.env.CLIENT_ID),
+    { body: commands }
+  );
 
-  if (!title || !linkPath) {
-    console.log("title または link が取得できません");
-    return null;
-  }
+  console.log("✅ /test コマンド登録完了");
+});
 
-  const link = "https://lala.fanpla.jp" + linkPath;
-
-  return `${title}\n${link}`;
-}
-// ---------- 通知 ----------
+// 通知（安全版）
 async function sendDiscord(title, content) {
   try {
     console.log("Discord送信開始");
 
-    const channel = await Promise.race([
-      client.channels.fetch(process.env.CHANNEL_ID),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("fetch timeout")), 10000)
-      )
-    ]);
+    const channel = await client.channels.fetch(process.env.CHANNEL_ID);
 
-    await Promise.race([
-      channel.send(`${title}\n\n${content}`),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("send timeout")), 10000)
-      )
-    ]);
+    await channel.send(`${title}\n\n${content}`);
 
     console.log("通知送信成功:", title);
-
   } catch (err) {
     console.error("Discord通知エラー:", err.message);
   }
 }
 
-// ---------- チェック ----------
+// スラッシュコマンド処理
+client.on("interactionCreate", async interaction => {
+  if (!interaction.isChatInputCommand()) return;
+
+  if (interaction.commandName === "test") {
+    await interaction.reply("テスト通知を送信します");
+
+    await sendDiscord(
+      "📢 **テスト通知**",
+      "これはテストメッセージです"
+    );
+  }
+});
+
+// 最新1件取得
+function getLatestBlog(html) {
+  const $ = cheerio.load(html);
+  const first = $("li.list__item").first();
+
+  const title = first.find(".tit").text().trim();
+  const linkPath = first.find("a").attr("href");
+
+  if (!title || !linkPath) return null;
+
+  return `${title}\nhttps://lala.fanpla.jp${linkPath}`;
+}
+
+// チェック
 async function checkWebsite() {
   console.log("🔍 ブログ更新チェック開始");
-
-  // ★ デバッグ①
-  console.log("BLOGS件数:", BLOGS.length);
 
   const isFirstRun = !fs.existsSync(FILE);
   let oldData = {};
@@ -104,43 +118,26 @@ async function checkWebsite() {
 
   let newData = {};
 
-  // ★ デバッグ②
-  console.log("ループ開始");
-
   for (const blog of BLOGS) {
-    console.log("取得開始:", blog.url); // ★ デバッグ③
-
     try {
       const res = await axios.get(blog.url, {
         timeout: 10000,
         headers: {
           "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36",
-          "Accept-Language": "ja-JP,ja;q=0.9"
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36"
         }
       });
 
-      console.log("取得成功:", blog.url); // ★ デバッグ④
-
       const latest = getLatestBlog(res.data);
-
-      if (!latest) {
-        console.log("記事抽出失敗:", blog.url);
-        continue;
-      }
+      if (!latest) continue;
 
       newData[blog.url] = latest;
 
-      if (isFirstRun) {
-        console.log("初回起動のため通知しません");
-        continue;
-      }
+      if (isFirstRun) continue;
 
       if (oldData[blog.url] !== latest) {
         console.log("新規検出:", blog.url);
         await sendDiscord(blog.message, latest);
-      } else {
-        console.log("新規なし:", blog.url);
       }
 
     } catch (err) {
@@ -153,7 +150,7 @@ async function checkWebsite() {
   console.log("🔍 ブログ更新チェック終了");
 }
 
-// ---------- cron ----------
+// cron
 cron.schedule("*/5 * * * *", async () => {
   console.log("🕒 cron発火", new Date().toLocaleString());
 
