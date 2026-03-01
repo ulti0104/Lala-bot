@@ -27,19 +27,19 @@ const BLOGS = [
 const FILE = "./last.json";
 const PORT = process.env.PORT || 10000;
 
-// Express
+// ---------- Express ----------
 const app = express();
 app.get("/", (_, res) => res.send("Bot稼働中"));
 app.listen(PORT, () => console.log(`🌐 Server running on port ${PORT}`));
 
-// Discord
+// ---------- Discord ----------
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
 client.once("clientReady", () => {
   console.log("✅ Bot起動完了");
 });
 
-// 最新1件だけ取得
+// ---------- 最新1件取得 ----------
 function getLatestBlog(html) {
   const $ = cheerio.load(html);
   const first = $(".block--bloglist .list__item").first();
@@ -53,7 +53,7 @@ function getLatestBlog(html) {
   return `${title}\n${link}`;
 }
 
-// 通知
+// ---------- 通知 ----------
 async function sendDiscord(title, content) {
   try {
     const channel = await client.channels.fetch(process.env.CHANNEL_ID);
@@ -64,9 +64,12 @@ async function sendDiscord(title, content) {
   }
 }
 
-// チェック
+// ---------- チェック ----------
 async function checkWebsite() {
   console.log("🔍 ブログ更新チェック開始");
+
+  // ★ デバッグ①
+  console.log("BLOGS件数:", BLOGS.length);
 
   const isFirstRun = !fs.existsSync(FILE);
   let oldData = {};
@@ -77,7 +80,12 @@ async function checkWebsite() {
 
   let newData = {};
 
+  // ★ デバッグ②
+  console.log("ループ開始");
+
   for (const blog of BLOGS) {
+    console.log("取得開始:", blog.url); // ★ デバッグ③
+
     try {
       const res = await axios.get(blog.url, {
         timeout: 10000,
@@ -88,8 +96,14 @@ async function checkWebsite() {
         }
       });
 
+      console.log("取得成功:", blog.url); // ★ デバッグ④
+
       const latest = getLatestBlog(res.data);
-      if (!latest) continue;
+
+      if (!latest) {
+        console.log("記事抽出失敗:", blog.url);
+        continue;
+      }
 
       newData[blog.url] = latest;
 
@@ -111,10 +125,11 @@ async function checkWebsite() {
   }
 
   fs.writeFileSync(FILE, JSON.stringify(newData, null, 2));
+
   console.log("🔍 ブログ更新チェック終了");
 }
 
-// cron（強制終了付き）
+// ---------- cron ----------
 cron.schedule("*/5 * * * *", async () => {
   console.log("🕒 cron発火", new Date().toLocaleString());
 
