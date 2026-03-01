@@ -65,9 +65,24 @@ function getLatestBlog(html) {
 // ---------- 通知 ----------
 async function sendDiscord(title, content) {
   try {
-    const channel = await client.channels.fetch(process.env.CHANNEL_ID);
-    await channel.send(`${title}\n\n${content}`);
-    console.log("通知送信:", title);
+    console.log("Discord送信開始");
+
+    const channel = await Promise.race([
+      client.channels.fetch(process.env.CHANNEL_ID),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("fetch timeout")), 10000)
+      )
+    ]);
+
+    await Promise.race([
+      channel.send(`${title}\n\n${content}`),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("send timeout")), 10000)
+      )
+    ]);
+
+    console.log("通知送信成功:", title);
+
   } catch (err) {
     console.error("Discord通知エラー:", err.message);
   }
