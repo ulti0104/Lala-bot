@@ -27,66 +27,50 @@ const BLOGS = [
 const FILE = "./last.json";
 const PORT = process.env.PORT || 10000;
 
-// ---------- Express ----------
+// Express
 const app = express();
 app.get("/", (_, res) => res.send("Bot稼働中"));
 app.listen(PORT, () => console.log(`🌐 Server running on port ${PORT}`));
 
-// ---------- Discord ----------
+// Discord
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
 client.once("clientReady", () => {
   console.log("✅ Bot起動完了");
 });
 
-// ---------- 差分 ----------
-function getDiff(oldArr = [], newArr = []) {
-  return newArr.filter(x => !oldArr.includes(x));
-}
-
-// ---------- HTML抽出 ----------
-function extractBlogText(html) {
+// 最新1件だけ取得
+function getLatestBlog(html) {
   const $ = cheerio.load(html);
-  const blogs = [];
+  const first = $(".block--bloglist .list__item").first();
 
-  $(".block--bloglist .list__item").each((i, el) => {
-    const title = $(el).find(".block--txt .tit").text().trim();
-    const link =
-      "https://lala.fanpla.jp" + $(el).find("a").attr("href");
+  const title = first.find(".block--txt .tit").text().trim();
+  const link =
+    "https://lala.fanpla.jp" + first.find("a").attr("href");
 
-    if (title && link) {
-      blogs.push(`${title}\n${link}`);
-    }
-  });
+  if (!title || !link) return null;
 
-  return blogs;
+  return `${title}\n${link}`;
 }
 
-// ---------- 通知 ----------
-async function sendDiscord(title, diff) {
-  if (!diff.length) return;
-
+// 通知
+async function sendDiscord(title, content) {
   try {
     const channel = await client.channels.fetch(process.env.CHANNEL_ID);
-
-    await channel.send(
-      `${title}\n\n` +
-      diff.join("\n\n")
-    );
-
+    await channel.send(`${title}\n\n${content}`);
     console.log("通知送信:", title);
   } catch (err) {
     console.error("Discord通知エラー:", err.message);
   }
 }
 
-// ---------- チェック ----------
+// チェック
 async function checkWebsite() {
   console.log("🔍 ブログ更新チェック開始");
 
   const isFirstRun = !fs.existsSync(FILE);
-
   let oldData = {};
+
   if (!isFirstRun) {
     oldData = JSON.parse(fs.readFileSync(FILE, "utf-8"));
   }
@@ -95,32 +79,28 @@ async function checkWebsite() {
 
   for (const blog of BLOGS) {
     try {
-      console.log("取得:", blog.url);
-
       const res = await axios.get(blog.url, {
         timeout: 10000,
         headers: {
           "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
-            "AppleWebKit/537.36 (KHTML, like Gecko) " +
-            "Chrome/120.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36",
           "Accept-Language": "ja-JP,ja;q=0.9"
         }
       });
 
-      const blogs = extractBlogText(res.data);
-      newData[blog.url] = blogs;
+      const latest = getLatestBlog(res.data);
+      if (!latest) continue;
+
+      newData[blog.url] = latest;
 
       if (isFirstRun) {
         console.log("初回起動のため通知しません");
         continue;
       }
 
-      const diff = getDiff(oldData[blog.url], blogs);
-
-      if (diff.length > 0 && oldData[blog.url]) {
-        console.log("新規あり:", blog.url);
-        await sendDiscord(blog.message, diff.slice(0, 5));
+      if (oldData[blog.url] !== latest) {
+        console.log("新規検出:", blog.url);
+        await sendDiscord(blog.message, latest);
       } else {
         console.log("新規なし:", blog.url);
       }
@@ -131,11 +111,10 @@ async function checkWebsite() {
   }
 
   fs.writeFileSync(FILE, JSON.stringify(newData, null, 2));
-
   console.log("🔍 ブログ更新チェック終了");
 }
 
-// ---------- cron（強制終了ガード） ----------
+// cron（強制終了付き）
 cron.schedule("*/5 * * * *", async () => {
   console.log("🕒 cron発火", new Date().toLocaleString());
 
@@ -151,5 +130,4 @@ cron.schedule("*/5 * * * *", async () => {
   }
 });
 
-// ---------- ログイン ----------
 client.login(process.env.DISCORD_TOKEN);
