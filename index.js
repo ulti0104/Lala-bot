@@ -1,3 +1,13 @@
+import dns from "dns";
+
+dns.lookup("discord.com", (err) => {
+  if (err) {
+    console.error("DNSエラー:", err);
+  } else {
+    console.log("Discord DNS OK");
+  }
+});
+
 import express from "express";
 import {
   Client,
