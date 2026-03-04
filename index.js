@@ -114,6 +114,6 @@ cron.schedule("*/5 * * * *", () => {
 console.log("Node:", process.version);
 console.log("TOKEN:", process.env.DISCORD_TOKEN ? "OK" : "NG");
 
-client.login(process.env.DISCORD_TOKEN);
+client.login(process.env.DISCORD_TOKEN)
  .then(() => console.log("login成功"))
  .catch(err => console.error("login失敗:", err));
