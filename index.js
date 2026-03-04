@@ -1,4 +1,3 @@
-みみ — 20:27
 import express from "express";
 import { Client, GatewayIntentBits } from "discord.js";
 
