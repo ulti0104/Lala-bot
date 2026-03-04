@@ -66,9 +66,10 @@ const client = new Client({
 });
 
 /* 🔥 重要：readyはこれ */
-client.once("ready", async () => {
+client.once("ready",  () => {
   console.log("🔥 READY発火（Botオンライン）");
-
+});
+  
   // スラッシュコマンド登録
   const commands = [
     new SlashCommandBuilder()
