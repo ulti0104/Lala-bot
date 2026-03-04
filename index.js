@@ -1,12 +1,12 @@
+みみ — 20:27
 import express from "express";
 import { Client, GatewayIntentBits } from "discord.js";
 
 const app = express();
-const PORT = process.env.PORT || 10000;
 
 app.get("/", (_, res) => res.send("OK"));
 
-app.listen(PORT, () => {
+app.listen(process.env.PORT, () => {
   console.log("🌐 Web server started");
 });
 
