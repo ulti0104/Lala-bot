@@ -1,63 +1,24 @@
-import dns from "dns";
 import express from "express";
-import {
-  Client,
-  GatewayIntentBits,
-  REST,
-  Routes,
-  SlashCommandBuilder
-} from "discord.js";
+import { Client, GatewayIntentBits } from "discord.js";
 import axios from "axios";
 import * as cheerio from "cheerio";
 import cron from "node-cron";
 import fs from "fs";
 
 /* =========================
-   DNSチェック
-========================= */
-dns.lookup("discord.com", (err) => {
-  if (err) {
-    console.error("DNSエラー:", err);
-  } else {
-    console.log("Discord DNS OK");
-  }
-});
-
-/* =========================
-   設定
-========================= */
-
-const BLOGS = [
-  {
-    url: "https://lala.fanpla.jp/blog/list/1426/0/",
-    message: "📢 **STAFFの業務日報更新！**"
-  },
-  {
-    url: "https://lala.fanpla.jp/blog/list/1427/0/",
-    message: "📢 **あやほのひとりごと報告書更新！**"
-  },
-  {
-    url: "https://lala.fanpla.jp/blog/list/1428/0/",
-    message: "📢 **ヲタクの定期連絡更新！**"
-  },
-  {
-    url: "https://lala.fanpla.jp/blog/list/1429/0/",
-    message: "📢 **ゆめかのあのねノート更新！**"
-  }
-];
-
-const FILE = "./last.json";
-const PORT = process.env.PORT || 10000;
-
-/* =========================
-   Express
+   Web Service維持用
 ========================= */
 
 const app = express();
-app.get("/", (_, res) => res.send("Bot稼働中"));
-app.listen(PORT, () =>
-  console.log(`🌐 Server running on port ${PORT}`)
-);
+const PORT = process.env.PORT || 10000;
+
+app.get("/", (req, res) => {
+  res.send("Bot running");
+});
+
+app.listen(PORT, () => {
+  console.log("🌐 Web server started");
+});
 
 /* =========================
    Discord
@@ -67,127 +28,90 @@ const client = new Client({
   intents: [GatewayIntentBits.Guilds]
 });
 
-/* 🔥 READYイベント */
-client.once("ready", async () => {
-  console.log("🔥 READY発火（Botオンライン）");
-  console.log(`ログイン中: ${client.user.tag}`);
-
-  /* ===== スラッシュコマンド登録 ===== */
-  const commands = [
-    new SlashCommandBuilder()
-      .setName("test")
-      .setDescription("通知テストを送信します")
-  ].map(cmd => cmd.toJSON());
-
-  const rest = new REST({ version: "10" })
-    .setToken(process.env.DISCORD_TOKEN);
-
-  try {
-    await rest.put(
-      Routes.applicationCommands(process.env.CLIENT_ID),
-      { body: commands }
-    );
-    console.log("✅ /test コマンド登録完了");
-  } catch (err) {
-    console.error("❌ コマンド登録エラー:", err.message);
-  }
+client.once("ready", () => {
+  console.log(`✅ Bot Online: ${client.user.tag}`);
 });
 
-/* エラー表示 */
-client.on("error", err => {
-  console.error("Clientエラー:", err);
-});
+/* =========================
+   通知設定
+========================= */
 
-client.on("shardError", err => {
-  console.error("Shardエラー:", err);
-});
-
-client.on("debug", msg => {
-  console.log("DEBUG:", msg);
-});
+const BLOG_URL = "https://lala.fanpla.jp/blog/list/1426/0/";
+const FILE = "./last.json";
 
 /* =========================
    通知処理
 ========================= */
 
-async function sendDiscord(title, content) {
+async function sendDiscord(content) {
   try {
     const channel = await client.channels.fetch(process.env.CHANNEL_ID);
-    await channel.send(`${title}\n\n${content}`);
-    console.log("✅ 通知送信成功:", title);
+    await channel.send(content);
+    console.log("📨 通知送信成功");
   } catch (err) {
-    console.error("❌ Discord通知エラー:", err.message);
+    console.error("通知エラー:", err.message);
   }
 }
 
 /* =========================
-   ブログ解析
+   ブログ取得
 ========================= */
 
-function getLatestBlog(html) {
+function getLatest(html) {
   const $ = cheerio.load(html);
   const first = $("li.list__item").first();
 
   const title = first.find(".tit").text().trim();
-  const linkPath = first.find("a").attr("href");
+  const link = first.find("a").attr("href");
 
-  if (!title || !linkPath) return null;
+  if (!title || !link) return null;
 
-  return `${title}\nhttps://lala.fanpla.jp${linkPath}`;
+  return `${title}\nhttps://lala.fanpla.jp${link}`;
 }
 
 /* =========================
    更新チェック
 ========================= */
 
-async function checkWebsite() {
-  console.log("🔍 ブログ更新チェック開始");
+async function checkUpdate() {
+  console.log("🔍 更新チェック");
 
-  const isFirstRun = !fs.existsSync(FILE);
-  let oldData = {};
+  const isFirst = !fs.existsSync(FILE);
+  let old = null;
 
-  if (!isFirstRun) {
-    oldData = JSON.parse(fs.readFileSync(FILE, "utf-8"));
+  if (!isFirst) {
+    old = fs.readFileSync(FILE, "utf-8");
   }
 
-  let newData = {};
+  try {
+    const res = await axios.get(BLOG_URL);
+    const latest = getLatest(res.data);
+    if (!latest) return;
 
-  for (const blog of BLOGS) {
-    try {
-      const res = await axios.get(blog.url, { timeout: 15000 });
-      const latest = getLatestBlog(res.data);
-      if (!latest) continue;
-
-      newData[blog.url] = latest;
-
-      if (!isFirstRun && oldData[blog.url] !== latest) {
-        console.log("🆕 新規検出:", blog.url);
-        await sendDiscord(blog.message, latest);
-      }
-
-    } catch (err) {
-      console.error("取得失敗:", blog.url, err.message);
+    if (!isFirst && old !== latest) {
+      await sendDiscord(`📢 ブログ更新！\n\n${latest}`);
     }
-  }
 
-  fs.writeFileSync(FILE, JSON.stringify(newData, null, 2));
-  console.log("🔍 ブログ更新チェック終了");
+    fs.writeFileSync(FILE, latest);
+
+  } catch (err) {
+    console.error("取得失敗:", err.message);
+  }
 }
 
 /* =========================
-   cron（5分ごと）
+   5分ごと
 ========================= */
 
-cron.schedule("*/5 * * * *", async () => {
-  console.log("🕒 cron発火", new Date().toLocaleString());
-  await checkWebsite();
+cron.schedule("*/5 * * * *", () => {
+  checkUpdate();
 });
 
 /* =========================
    起動
 ========================= */
 
-console.log("Node version:", process.version);
-console.log("TOKEN確認:", process.env.DISCORD_TOKEN ? "OK" : "未設定");
+console.log("Node:", process.version);
+console.log("TOKEN:", process.env.DISCORD_TOKEN ? "OK" : "NG");
 
 client.login(process.env.DISCORD_TOKEN);
