@@ -1,13 +1,4 @@
 import dns from "dns";
-
-dns.lookup("discord.com", (err) => {
-  if (err) {
-    console.error("DNSエラー:", err);
-  } else {
-    console.log("Discord DNS OK");
-  }
-});
-
 import express from "express";
 import {
   Client,
@@ -20,6 +11,17 @@ import axios from "axios";
 import * as cheerio from "cheerio";
 import cron from "node-cron";
 import fs from "fs";
+
+/* =========================
+   DNSチェック
+========================= */
+dns.lookup("discord.com", (err) => {
+  if (err) {
+    console.error("DNSエラー:", err);
+  } else {
+    console.log("Discord DNS OK");
+  }
+});
 
 /* =========================
    設定
@@ -65,19 +67,20 @@ const client = new Client({
   intents: [GatewayIntentBits.Guilds]
 });
 
-/* 🔥 重要：readyはこれ */
-client.once("ready",  () => {
+/* 🔥 READYイベント */
+client.once("ready", async () => {
   console.log("🔥 READY発火（Botオンライン）");
-});
-  
-  // スラッシュコマンド登録
+  console.log(`ログイン中: ${client.user.tag}`);
+
+  /* ===== スラッシュコマンド登録 ===== */
   const commands = [
     new SlashCommandBuilder()
       .setName("test")
       .setDescription("通知テストを送信します")
   ].map(cmd => cmd.toJSON());
 
-  const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
+  const rest = new REST({ version: "10" })
+    .setToken(process.env.DISCORD_TOKEN);
 
   try {
     await rest.put(
@@ -86,10 +89,11 @@ client.once("ready",  () => {
     );
     console.log("✅ /test コマンド登録完了");
   } catch (err) {
-    console.error("コマンド登録エラー:", err.message);
+    console.error("❌ コマンド登録エラー:", err.message);
   }
+});
 
-/* エラー強制表示 */
+/* エラー表示 */
 client.on("error", err => {
   console.error("Clientエラー:", err);
 });
@@ -171,7 +175,7 @@ async function checkWebsite() {
 }
 
 /* =========================
-   cron
+   cron（5分ごと）
 ========================= */
 
 cron.schedule("*/5 * * * *", async () => {
