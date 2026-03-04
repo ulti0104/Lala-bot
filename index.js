@@ -88,7 +88,6 @@ client.once("ready",  () => {
   } catch (err) {
     console.error("コマンド登録エラー:", err.message);
   }
-});
 
 /* エラー強制表示 */
 client.on("error", err => {
