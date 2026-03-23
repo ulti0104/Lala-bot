@@ -92,13 +92,54 @@ const FILE = "./last.json";
    通知
 ========================= */
 
-async function sendDiscord(content) {
+async function sendDiscord(content, retry = true) {
+  console.log("📨 sendDiscord 呼び出し");
+
   try {
+    if (!client) {
+      console.log("❌ clientが存在しない");
+      return;
+    }
+
+    console.log("client存在OK");
+
+    if (!client.isReady()) {
+      console.log("⚠ client未ready（送信スキップ）");
+      return;
+    }
+
+    console.log("client ready OK");
+    console.log("CHANNEL_ID =", process.env.CHANNEL_ID);
+
     const channel = await client.channels.fetch(process.env.CHANNEL_ID);
+    console.log("channels.fetch 完了");
+
+    if (!channel) {
+      console.log("❌ channel取得失敗（null）");
+      return;
+    }
+
+    console.log("取得チャンネル名:", channel.name);
+    console.log("チャンネルtype:", channel.type);
+
+    if (!channel.isTextBased()) {
+      console.log("❌ テキストチャンネルではない");
+      return;
+    }
+
+    console.log("✉ send 実行前");
     await channel.send(content);
-    console.log("📨 通知送信成功");
+    console.log("✅ 通知送信成功");
+
   } catch (err) {
-    console.error("通知エラー:", err.message);
+    console.error("❌ 通知エラー全文:", err);
+
+    if (retry) {
+      console.log("🔁 5秒後に1回だけ再送");
+      setTimeout(() => {
+        sendDiscord(content, false);
+      }, 5000);
+    }
   }
 }
 
