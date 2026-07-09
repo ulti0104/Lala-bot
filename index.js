@@ -122,7 +122,19 @@ const TARGETS = [
     type: "movie",
     url: "https://lala.fanpla.jp/movie/list/1",
     message: "🎬 **MOVIE更新！**"
-  }
+  },
+   {
+     key: "photo",
+     type: "photo",
+     url: "https://lala.fanpla.jp/photo/list/3",
+     message: "📷 PHOTO更新！"
+   },
+   {
+     key: "radio",
+     type: "radio",
+     url: "https://lala.fanpla.jp/stream/list/2",
+     message: "📻 RADIO更新！"
+   }
 ];
 
 const FILE = "./last.json";
@@ -273,7 +285,11 @@ function getLatestMovie(html) {
 ========================= */
 
 function parseLatest(target, html) {
-  if (target.type === "movie") {
+  if (
+    target.type === "movie" 
+    target.type === "photo" 
+    target.type === "radio"
+  ) {
     return getLatestMovie(html);
   }
   return getLatestBlog(html);
