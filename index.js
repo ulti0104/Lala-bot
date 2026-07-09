@@ -286,12 +286,13 @@ function getLatestMovie(html) {
 
 function parseLatest(target, html) {
   if (
-    target.type === "movie" 
-    target.type === "photo" 
+    target.type === "movie" ||
+    target.type === "photo" ||
     target.type === "radio"
   ) {
     return getLatestMovie(html);
   }
+
   return getLatestBlog(html);
 }
 
